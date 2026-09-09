@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 # 웹페이지 기본 설정
@@ -13,10 +12,6 @@ st.set_page_config(
 st.title("🦠 대한민국 SVIR 감염병 - 백신 시뮬레이터")
 st.markdown("""
 이 시뮬레이터는 **SVIR 모델(Susceptible-Vaccinated-Infected-Recovered)**을 사용하여 바이러스 변이 및 백신 종류에 따른 감염 확산 양상을 시각화합니다.
-- **S (Susceptible)**: 감염 가능 미접종자
-- **V (Vaccinated)**: 백신 접종 완료자
-- **I (Infected)**: 현재 감염자
-- **R (Recovered)**: 회복자 및 면역 확보자
 """)
 
 # 1. 바이러스 및 백신 매개변수 데이터 정의
@@ -97,7 +92,7 @@ def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
   return t_arr, S, V, I, R
 
 
-# 3. 사이드바 조작창
+# 3. 사이드바 조작창 및 지표 가이드
 st.sidebar.header("⚙️ 시뮬레이션 파라미터 설정")
 
 selected_virus = st.sidebar.selectbox(
@@ -129,11 +124,17 @@ sim_days = st.sidebar.slider(
     "시뮬레이션 기간 (일)", min_value=30, max_value=365, value=180, step=10
 )
 
-st.info(
-    f"**선택된 바이러스**: {selected_virus}"
-    f" (*{VIRUSES[selected_virus]['desc']}*)\n\n**선택된 백신**:"
-    f" {selected_vaccine} (*{VACCINES[selected_vaccine]['desc']}*)"
-)
+# 사이드바 하단에 지표 설명 가이드 배치
+st.sidebar.markdown("---")
+st.sidebar.subheader("📖 지표 가이드")
+st.sidebar.caption("""
+- **S (Susceptible)**: 감염 가능 미접종자
+- **V (Vaccinated)**: 백신 접종 완료자
+- **I (Infected)**: 현재 감염자
+- **R (Recovered)**: 회복자 및 면역 확보자
+- **전파 피크(억제 최소)**: 감염자 수가 최대에 달하여 전파 억제력이 가장 무너진 시점
+- **🔥 최대 전파 억제 전환점**: 백신/면역 효과로 바이러스 감소폭이 가장 커지며 전파 억제가 극대화되는 시점
+""")
 
 # 4. 모델 연산 실행
 virus_info = VIRUSES[selected_virus]
@@ -156,103 +157,47 @@ t_arr, S, V, I, R = solve_svir_fast(
 
 # 5. 전파 억제 관련 지표 분석
 max_infected = int(np.max(I))
-peak_idx = np.argmax(I)  # 전파 억제가 가장 안 된 정점 (Peak)
+peak_idx = np.argmax(I)
 peak_day = int(t_arr[peak_idx])
 
-# 전파 억제율이 가장 높아지는 시점 (감염 피크 이후 확산세가 꺾이고 바이러스 전파가 감소하는 전환 지점)
-# 피크 이후 일일 감염 감소폭(-dI/dt)이 가장 큰 지점 계산
+# 전파 억제 전환점 계산
 dI = np.diff(I)
-suppression_idx = (
-    np.argmin(dI) + 1 if len(dI) > 0 else peak_idx
-)  # 감염자 수 감소 속도가 가장 빠른 지점
+suppression_idx = np.argmin(dI) + 1 if len(dI) > 0 else peak_idx
 suppression_day = int(t_arr[suppression_idx])
-suppression_val_million = I[suppression_idx] / 1e6
+
+# 주요 지표 상단 표시
+st.info(
+    f"**선택된 바이러스**: {selected_virus} | **선택된 백신**:"
+    f" {selected_vaccine}"
+)
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("최대 동시 감염자", f"{max_infected:,} 명")
-col2.metric("전파 피크(억제 최소)", f"{peak_day} 일째")
-col3.metric("🔥 최대 전파 억제 전환점", f"{suppression_day} 일째")
+col2.metric(
+    "전파 피크 (억제 최소)",
+    f"{peak_day} 일째",
+    help="감염자 수가 최고조에 달한 지점입니다.",
+)
+col3.metric(
+    "🔥 최대 전파 억제 전환점",
+    f"{suppression_day} 일째",
+    help="감염 감소 속도가 가장 빠른 전환점입니다.",
+)
 col4.metric("최종 백신 접종자", f"{int(V[-1]):,} 명")
 
 st.markdown("---")
 
-# 6. 시각화 그래프 (Plotly 사용)
+# 6. 시각화 그래프
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
-fig = go.Figure()
-
-# 기본 곡선 추가
-fig.add_trace(
-    go.Scatter(
-        x=t_arr,
-        y=S / 1e6,
-        mode="lines",
-        name="S (감염 가능 미접종자)",
-        line=dict(color="#1f77b4"),
-    )
-)
-fig.add_trace(
-    go.Scatter(
-        x=t_arr,
-        y=V / 1e6,
-        mode="lines",
-        name="V (백신 접종 완료자)",
-        line=dict(color="#2ca02c"),
-    )
-)
-fig.add_trace(
-    go.Scatter(
-        x=t_arr,
-        y=I / 1e6,
-        mode="lines",
-        name="I (현재 감염자)",
-        line=dict(color="#ff7f0e", width=3),
-    )
-)
-fig.add_trace(
-    go.Scatter(
-        x=t_arr,
-        y=R / 1e6,
-        mode="lines",
-        name="R (회복자/면역)",
-        line=dict(color="#9467bd"),
-    )
+chart_df = pd.DataFrame(
+    {
+        "S (감염 가능 미접종자)": S / 1e6,
+        "V (백신 접종 완료자)": V / 1e6,
+        "I (현재 감염자)": I / 1e6,
+        "R (회복자/면역)": R / 1e6,
+    },
+    index=t_arr,
 )
 
-# 🔥 전파 억제력 최고 지점 마커 및 가이드선 추가
-fig.add_trace(
-    go.Scatter(
-        x=[suppression_day],
-        y=[suppression_val_million],
-        mode="markers+text",
-        name="최대 전파 억제 지점",
-        marker=dict(size=14, color="red", symbol="star"),
-        text=[f"📍 최대 억제 전환점 ({suppression_day}일)"],
-        textposition="top right",
-    )
-)
-
-fig.add_shape(
-    type="line",
-    x0=suppression_day,
-    y0=0,
-    x1=suppression_day,
-    y1=max(I / 1e6) * 1.1,
-    line=dict(color="red", width=1.5, dash="dash"),
-)
-
-fig.update_layout(
-    xaxis_title="시간 (일)",
-    yaxis_title="인구수 (백만 명)",
-    hovermode="x unified",
-    height=450,
-    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-st.info(
-    f"💡 **붉은색 별표(📍) 지점({suppression_day}일째)**은 백신 접종 효과 및"
-    " 집단 면역 형성으로 인해 **바이러스의 감염 감소 폭이 가장 커지며 전파"
-    " 억제력이 극대화되는 시점**입니다."
-)
+st.line_chart(chart_df, height=450)
