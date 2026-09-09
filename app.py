@@ -31,10 +31,11 @@ VACCINES = {
     "생백신 (약독화)": {"efficacy": 0.70, "desc": "전통적 방식의 약독화 백신 (효능 70%)"}
 }
 
-# 2. 수치해석 함수
-def solve_svir(N, beta, gamma, v, efficacy, I0, days):
-    dt = 0.1
-    steps = int(days / dt)
+# 2. 최적화된 수치해석 함수 (연산 속도 대폭 개선)
+def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
+    # 1일 단위 계산으로 스텝 수를 줄여 연산 렉 제거 (dt = 1.0)
+    dt = 1.0
+    steps = int(days)
     
     t_arr = np.linspace(0, days, steps)
     S = np.zeros(steps)
@@ -50,14 +51,16 @@ def solve_svir(N, beta, gamma, v, efficacy, I0, days):
     beta_v = beta * (1.0 - efficacy)
     
     for i in range(steps - 1):
-        dS = (-beta * S[i] * I[i] / N - v * S[i]) * dt
-        dV = (v * S[i] - beta_v * V[i] * I[i] / N) * dt
-        dI = (beta * S[i] * I[i] / N + beta_v * V[i] * I[i] / N - gamma * I[i]) * dt
-        dR = (gamma * I[i]) * dt
+        s_curr, v_curr, i_curr = S[i], V[i], I[i]
         
-        S[i+1] = max(0, S[i] + dS)
-        V[i+1] = max(0, V[i] + dV)
-        I[i+1] = max(0, I[i] + dI)
+        dS = (-beta * s_curr * i_curr / N - v * s_curr) * dt
+        dV = (v * s_curr - beta_v * v_curr * i_curr / N) * dt
+        dI = (beta * s_curr * i_curr / N + beta_v * v_curr * i_curr / N - gamma * i_curr) * dt
+        dR = (gamma * i_curr) * dt
+        
+        S[i+1] = max(0, s_curr + dS)
+        V[i+1] = max(0, v_curr + dV)
+        I[i+1] = max(0, i_curr + dI)
         R[i+1] = max(0, R[i] + dR)
         
     return t_arr, S, V, I, R
@@ -77,7 +80,7 @@ sim_days = st.sidebar.slider("시뮬레이션 기간 (일)", min_value=30, max_v
 
 st.info(f"**선택된 바이러스**: {selected_virus} (*{VIRUSES[selected_virus]['desc']}*)\n\n**선택된 백신**: {selected_vaccine} (*{VACCINES[selected_vaccine]['desc']}*)")
 
-# 4. 모델 계산
+# 4. 모델 연산 실행
 virus_info = VIRUSES[selected_virus]
 vac_info = VACCINES[selected_vaccine]
 
@@ -86,7 +89,8 @@ R0_val = virus_info["R0"]
 beta = R0_val * gamma
 efficacy = vac_info["efficacy"]
 
-t_arr, S, V, I, R = solve_svir(
+# 속도 최적화 함수 사용
+t_arr, S, V, I, R = solve_svir_fast(
     N=N_pop, 
     beta=beta, 
     gamma=gamma, 
@@ -111,7 +115,7 @@ col4.metric("최종 회복/면역자", f"{total_recovered:,} 명")
 
 st.markdown("---")
 
-# 5. Streamlit 내장 차트로 시각화 (한글 깨짐 완전 해결)
+# 5. 차트 데이터 다운샘플링 시각화 (렌더링 속도 향상)
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
 chart_data = {
@@ -121,4 +125,4 @@ chart_data = {
     "R (회복자/면역)": R / 1e6
 }
 
-st.line_chart(chart_data)
+st.line_chart(chart_data, height=400)
