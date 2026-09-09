@@ -1,6 +1,11 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+# 한글 폰트 설정 (기본 시스템 폰트 활용)
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['axes.unicode_minus'] = False
 
 # 웹페이지 기본 설정
 st.set_page_config(
@@ -124,7 +129,7 @@ sim_days = st.sidebar.slider(
     "시뮬레이션 기간 (일)", min_value=30, max_value=365, value=180, step=10
 )
 
-# 사이드바 하단에 지표 설명 가이드 배치
+# 사이드바 하단 지표 가이드 배치
 st.sidebar.markdown("---")
 st.sidebar.subheader("📖 지표 가이드")
 st.sidebar.caption("""
@@ -132,8 +137,8 @@ st.sidebar.caption("""
 - **V (Vaccinated)**: 백신 접종 완료자
 - **I (Infected)**: 현재 감염자
 - **R (Recovered)**: 회복자 및 면역 확보자
-- **전파 피크(억제 최소)**: 감염자 수가 최대에 달하여 전파 억제력이 가장 무너진 시점
-- **🔥 최대 전파 억제 전환점**: 백신/면역 효과로 바이러스 감소폭이 가장 커지며 전파 억제가 극대화되는 시점
+- **전파 피크(억제 최소)**: 감염자 수가 최고조에 달한 지점
+- **🔥 최대 전파 억제 전환점**: 감염자 수 감소 속도가 가장 빠른 시점
 """)
 
 # 4. 모델 연산 실행
@@ -160,10 +165,11 @@ max_infected = int(np.max(I))
 peak_idx = np.argmax(I)
 peak_day = int(t_arr[peak_idx])
 
-# 전파 억제 전환점 계산
+# 전파 억제 전환점 계산 (dI/dt가 최소 = 감소폭 최고)
 dI = np.diff(I)
 suppression_idx = np.argmin(dI) + 1 if len(dI) > 0 else peak_idx
 suppression_day = int(t_arr[suppression_idx])
+suppression_val = I[suppression_idx] / 1e6
 
 # 주요 지표 상단 표시
 st.info(
@@ -187,17 +193,42 @@ col4.metric("최종 백신 접종자", f"{int(V[-1]):,} 명")
 
 st.markdown("---")
 
-# 6. 시각화 그래프
+# 6. 시각화 그래프 (Matplotlib 활용)
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
-chart_df = pd.DataFrame(
-    {
-        "S (감염 가능 미접종자)": S / 1e6,
-        "V (백신 접종 완료자)": V / 1e6,
-        "I (현재 감염자)": I / 1e6,
-        "R (회복자/면역)": R / 1e6,
-    },
-    index=t_arr,
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# 곡선 플롯
+ax.plot(
+    t_arr, S / 1e6, label="S (Susceptible)", color="#1f77b4", linewidth=1.5
+)
+ax.plot(t_arr, V / 1e6, label="V (Vaccinated)", color="#2ca02c", linewidth=1.5)
+ax.plot(t_arr, I / 1e6, label="I (Infected)", color="#ff7f0e", linewidth=2.5)
+ax.plot(t_arr, R / 1e6, label="R (Recovered)", color="#9467bd", linewidth=1.5)
+
+# 🔥 최대 전파 억제 전환점 수직 수평선 및 마커 추가
+ax.axvline(
+    x=suppression_day,
+    color="red",
+    linestyle="--",
+    linewidth=1.5,
+    label=f"Max Suppression Day ({suppression_day}d)",
+)
+ax.plot(
+    suppression_day,
+    suppression_val,
+    marker="*",
+    markersize=12,
+    color="red",
+    zorder=5,
 )
 
-st.line_chart(chart_df, height=450)
+# 그래프 꾸미기
+ax.set_xlabel("Time (Days)")
+ax.set_ylabel("Population (Millions)")
+ax.set_xlim(0, sim_days)
+ax.grid(True, linestyle=":", alpha=0.6)
+ax.legend(loc="upper right", frameon=True)
+
+# Streamlit에 그래프 출력
+st.pyplot(fig)
