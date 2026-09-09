@@ -17,7 +17,7 @@ st.markdown("""
 - **R (Recovered)**: 회복자 및 면역 확보자
 """)
 
-# 1. 바이러스 및 백신 매개변수 데이터 정의 (메르스 추가)
+# 1. 바이러스 및 백신 매개변수 데이터 정의
 VIRUSES = {
     "COVID-19 (원형)": {"R0": 2.5, "gamma": 1/14, "desc": "초기 코로나19 바이러스 (기초감염재생산수 R0 = 2.5)"},
     "COVID-19 (델타 변이)": {"R0": 5.0, "gamma": 1/10, "desc": "높은 전파력을 가진 델타 변이 (R0 = 5.0)"},
@@ -127,37 +127,3 @@ chart_data = {
 }
 
 st.line_chart(chart_data, height=400)
-
-st.markdown("---")
-
-# 6. 수학적 일반화 (Mathematical Generalization) 설명
-st.subheader("📐 SVIR 모델의 수학적 일반화 (Mathematical Generalization)")
-
-st.markdown(r"""
-전체 인구수 $N$이 일정하다고 가정할 때 ($N = S(t) + V(t) + I(t) + R(t)$), 시간 $t$에 따른 상태 변화는 다음과 같은 **비선형 연립 미분방정식(Nonlinear Ordinary Differential Equations)**으로 정의됩니다.
-
-$$
-\begin{aligned}
-\frac{dS}{dt} &= -\beta \frac{S I}{N} - v S \\[8pt]
-\frac{dV}{dt} &= v S - (1 - e)\beta \frac{V I}{N} \\[8pt]
-\frac{dI}{dt} &= \beta \frac{S I}{N} + (1 - e)\beta \frac{V I}{N} - \gamma I \\[8pt]
-\frac{dR}{dt} &= \gamma I
-\end{aligned}
-$$
-""")
-
-with st.expander("🔍 수학적 파라미터 및 변수 상세 정의 보기"):
-    st.markdown(r"""
-    * **상태 변수 (State Variables)**:
-      * $S(t)$: 시간 $t$에서의 감염 가능 미접종 인구수 (Susceptible)
-      * $V(t)$: 시간 $t$에서의 백신 접종 완료 인구수 (Vaccinated)
-      * $I(t)$: 시간 $t$에서의 감염자 인구수 (Infected)
-      * $R(t)$: 시간 $t$에서의 회복자 및 면역 형성 인구수 (Recovered)
-
-    * **파라미터 (Parameters)**:
-      * $\beta$ (**감염 전파율**, Transmission Rate): $\beta = R_0 \cdot \gamma$
-      * $R_0$ (**기초감염재생산수**, Basic Reproduction Number): 감염자 1명이 면역이 없는 집단에서 감염시킬 수 있는 평균 인원수
-      * $\gamma$ (**회복율/격리해제율**, Recovery Rate): $\gamma = \frac{1}{\text{감염 유효 기간(일)}}$
-      * $v$ (**일일 백신 접종률**, Vaccination Rate): 미접종군($S$)이 매일 백신 접종군($V$)으로 이동하는 비율
-      * $e$ (**백신 효능**, Vaccine Efficacy): 감염 방지율 ($0 \le e \le 1$). 미접종군의 감염율이 $\beta$일 때, 접종군의 돌파감염율은 $(1-e)\beta$가 됨
-    """)
