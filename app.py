@@ -18,7 +18,7 @@ st.markdown("""
 - **R (Recovered)**: 회복자 및 면역 확보자
 """)
 
-# 1. 바이러스 정의 (전파력 R0, 회복기간)
+# 1. 바이러스 정의
 VIRUSES = {
     "COVID-19 (원형)": {"R0": 2.5, "gamma": 1/14, "desc": "초기 코로나19 바이러스 (기초감염재생산수 R0 = 2.5)"},
     "COVID-19 (델타 변이)": {"R0": 5.0, "gamma": 1/10, "desc": "높은 전파력을 가진 델타 변이 (R0 = 5.0)"},
@@ -27,37 +27,36 @@ VIRUSES = {
     "B형 간염 (Hepatitis B)": {"R0": 1.8, "gamma": 1/30, "desc": "혈액/체액 매개 간염 바이러스 (R0 = 1.8)"}
 }
 
-# 2. 백신 데이터 및 바이러스별 실제 효능 매트릭스 (Virus-Vaccine Efficacy Matrix)
-# 백신 종류마다 바이러스별 예방 효능(0.0 ~ 1.0)에 유의미한 차이를 둡니다.
+# 2. 백신 데이터 및 바이러스별 실제 효능 매트릭스
 VACCINE_EFFICACY_MATRIX = {
     "mRNA 백신": {
         "COVID-19 (원형)": 0.95,
         "COVID-19 (델타 변이)": 0.85,
-        "COVID-19 (오미크론 변이)": 0.55,
-        "SARS": 0.60,
+        "COVID-19 (오미크론 변이)": 0.60,
+        "SARS": 0.70,
         "B형 간염 (Hepatitis B)": 0.80,
-        "desc": "변이 호흡기 바이러스에 우수한 예방 효과"
+        "desc": "변이 바이러스 감염 예방 우수 (효능 60~95%)"
     },
     "생백신 (약독화)": {
         "COVID-19 (원형)": 0.70,
         "COVID-19 (델타 변이)": 0.50,
         "COVID-19 (오미크론 변이)": 0.30,
-        "SARS": 0.65,
+        "SARS": 0.60,
         "B형 간염 (Hepatitis B)": 0.60,
-        "desc": "전통적 약독화 방식 백신 (중등도 예방 효과)"
+        "desc": "중등도 예방 효과 (효능 30~70%)"
     },
     "사백신 (불활성화)": {
         "COVID-19 (원형)": 0.50,
         "COVID-19 (델타 변이)": 0.30,
-        "COVID-19 (오미크론 변이)": 0.15,
+        "COVID-19 (오미크론 변이)": 0.10,
         "SARS": 0.40,
-        "B형 간염 (Hepatitis B)": 0.95, # B형 간염에는 매우 높은 예방률
-        "desc": "불활성화 항원 백신 (B형 간염에 95% 높은 예방 효과)"
+        "B형 간염 (Hepatitis B)": 0.95,
+        "desc": "B형 간염 높은 효과 / 변이 호흡기 바이러스 예방 효과 낮음"
     }
 }
 
 # 3. SVIR 수치해석 모델 연산 함수
-def solve_svir(N, beta, gamma, v, efficacy, I0, days):
+def solve_svir(N, beta, gamma, v, efficacy, I0, initial_vac_pct, days):
     dt = 1.0
     steps = int(days)
     
@@ -67,18 +66,18 @@ def solve_svir(N, beta, gamma, v, efficacy, I0, days):
     I = np.zeros(steps)
     R = np.zeros(steps)
     
+    # 초기 인구 분배 (초기 접종자 비율 반영)
+    V[0] = (N - I0) * initial_vac_pct
+    S[0] = (N - I0) - V[0]
     I[0] = I0
-    S[0] = N - I0
-    V[0] = 0
-    R[0] = 0
+    R[0] = 0.0
     
-    # 접종자의 돌파 감염률 = (1 - 백신효능) * beta
+    # 접종자의 돌파 감염률
     beta_v = beta * (1.0 - efficacy)
     
     for i in range(steps - 1):
         s_curr, v_curr, i_curr = S[i], V[i], I[i]
         
-        # 미분방정식 오일러 수치해석
         dS = (-beta * s_curr * i_curr / N - v * s_curr) * dt
         dV = (v * s_curr - beta_v * v_curr * i_curr / N) * dt
         dI = (beta * s_curr * i_curr / N + beta_v * v_curr * i_curr / N - gamma * i_curr) * dt
@@ -101,7 +100,10 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("📈 시뮬레이션 환경 조건")
 N_pop = st.sidebar.number_input("대한민국 인구수 (명)", value=51600000, step=1000000, format="%d")
 initial_infected = st.sidebar.number_input("초기 감염자 수 (명)", value=100, step=10)
-daily_vac_rate_pct = st.sidebar.slider("일일 백신 접종률 (%)", min_value=0.0, max_value=2.0, value=0.5, step=0.1) / 100.0
+
+# 핵심 개선: 초기 접종자 비율 슬라이더 추가
+initial_vac_pct = st.sidebar.slider("시작 시점 접종 완료율 (%)", min_value=0, max_value=90, value=50, step=5) / 100.0
+daily_vac_rate_pct = st.sidebar.slider("일일 추가 백신 접종률 (%)", min_value=0.0, max_value=2.0, value=0.5, step=0.1) / 100.0
 sim_days = st.sidebar.slider("시뮬레이션 기간 (일)", min_value=30, max_value=365, value=180, step=10)
 
 # 선택된 바이러스 및 백신 정보 추출
@@ -127,6 +129,7 @@ t_arr, S, V, I, R = solve_svir(
     v=daily_vac_rate_pct, 
     efficacy=actual_efficacy, 
     I0=initial_infected, 
+    initial_vac_pct=initial_vac_pct,
     days=sim_days
 )
 
@@ -145,10 +148,9 @@ col4.metric("최종 회복/면역자", f"{total_recovered:,} 명")
 
 st.markdown("---")
 
-# 6. Streamlit 반응성 강화를 위한 pandas DataFrame 전환 및 차트 출력
+# 6. 차트 출력
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
-# DataFrame 구조로 명시적 변환하여 백신/바이러스 변경 시 차트가 동적으로 리렌더링되도록 처리
 df_chart = pd.DataFrame({
     "날짜 (일)": t_arr,
     "S (감염 가능 미접종자)": S / 1e6,
