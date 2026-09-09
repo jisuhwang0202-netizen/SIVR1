@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 
 # 웹페이지 기본 설정
@@ -33,17 +32,38 @@ VACCINES = {
     "생백신 (약독화)": {"efficacy": 0.70, "desc": "전통적 방식의 약독화 백신 (효능 70%)"}
 }
 
-# 2. SVIR 미분방정식
-def svir_model(y, t, N, beta, gamma, v, efficacy):
-    S, V, I, R = y
+# 2. 수치해석 함수 (scipy 라이브러리 없이 직접 계산하는 수치 미분)
+def solve_svir(N, beta, gamma, v, efficacy, I0, days):
+    dt = 0.1  # 계산 정밀도 간격 (일 단위)
+    steps = int(days / dt)
+    
+    t_arr = np.linspace(0, days, steps)
+    S = np.zeros(steps)
+    V = np.zeros(steps)
+    I = np.zeros(steps)
+    R = np.zeros(steps)
+    
+    # 초깃값 설정
+    I[0] = I0
+    S[0] = N - I0
+    V[0] = 0
+    R[0] = 0
+    
     beta_v = beta * (1.0 - efficacy)
     
-    dSdt = -beta * S * I / N - v * S
-    dVdt = v * S - beta_v * V * I / N
-    dIdt = beta * S * I / N + beta_v * V * I / N - gamma * I
-    dRdt = gamma * I
-    
-    return [dSdt, dVdt, dIdt, dRdt]
+    # Euler 수치해석 계산 Loop
+    for i in range(steps - 1):
+        dS = (-beta * S[i] * I[i] / N - v * S[i]) * dt
+        dV = (v * S[i] - beta_v * V[i] * I[i] / N) * dt
+        dI = (beta * S[i] * I[i] / N + beta_v * V[i] * I[i] / N - gamma * I[i]) * dt
+        dR = (gamma * I[i]) * dt
+        
+        S[i+1] = max(0, S[i] + dS)
+        V[i+1] = max(0, V[i] + dV)
+        I[i+1] = max(0, I[i] + dI)
+        R[i+1] = max(0, R[i] + dR)
+        
+    return t_arr, S, V, I, R
 
 # 3. 좌측 사이드바 조작창
 st.sidebar.header("⚙️ 시뮬레이션 파라미터 설정")
@@ -70,18 +90,21 @@ R0_val = virus_info["R0"]
 beta = R0_val * gamma
 efficacy = vac_info["efficacy"]
 
-I0 = initial_infected
-S0 = N_pop - I0
-V0 = 0
-R0_pop = 0
-
-t = np.linspace(0, sim_days, sim_days)
-solution = odeint(svir_model, [S0, V0, I0, R0_pop], t, args=(N_pop, beta, gamma, daily_vac_rate_pct, efficacy))
-S, V, I, R = solution.T
+# 모델 계산 실행
+t_arr, S, V, I, R = solve_svir(
+    N=N_pop, 
+    beta=beta, 
+    gamma=gamma, 
+    v=daily_vac_rate_pct, 
+    efficacy=efficacy, 
+    I0=initial_infected, 
+    days=sim_days
+)
 
 # 주요 지표 요약
 max_infected = int(np.max(I))
-peak_day = int(np.argmax(I))
+peak_idx = np.argmax(I)
+peak_day = int(t_arr[peak_idx])
 total_vaccinated = int(V[-1])
 total_recovered = int(R[-1])
 
@@ -95,10 +118,10 @@ st.markdown("---")
 
 # 5. 그래프 시각화
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(t, S / 1e6, label='S (감염 가능 미접종자)', color='#1f77b4', linewidth=2)
-ax.plot(t, V / 1e6, label='V (백신 접종 완료자)', color='#2ca02c', linewidth=2)
-ax.plot(t, I / 1e6, label='I (현재 감염자)', color='#d62728', linewidth=2)
-ax.plot(t, R / 1e6, label='R (회복자/면역)', color='#7f7f7f', linewidth=2, linestyle='--')
+ax.plot(t_arr, S / 1e6, label='S (감염 가능 미접종자)', color='#1f77b4', linewidth=2)
+ax.plot(t_arr, V / 1e6, label='V (백신 접종 완료자)', color='#2ca02c', linewidth=2)
+ax.plot(t_arr, I / 1e6, label='I (현재 감염자)', color='#d62728', linewidth=2)
+ax.plot(t_arr, R / 1e6, label='R (회복자/면역)', color='#7f7f7f', linewidth=2, linestyle='--')
 
 ax.set_title(f"SVIR 시뮬레이션 - {selected_virus} & {selected_vaccine}", fontsize=14, pad=12)
 ax.set_xlabel("기간 (일)", fontsize=11)
