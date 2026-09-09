@@ -25,15 +25,15 @@ VIRUSES = {
     "SARS": {"R0": 3.0, "gamma": 1/12, "desc": "사스 중증급성호흡기증후군 (R0 = 3.0)"}
 }
 
+# 백신 종류 설정 (재조합 백신 제외, 사백신 추가)
 VACCINES = {
     "mRNA 백신": {"efficacy": 0.95, "desc": "화이자/모더나 등 높은 예방 효과 (효능 95%)"},
-    "재조합 백신 (합성항원)": {"efficacy": 0.80, "desc": "노바백스 등 안정적인 면역 반응 (효능 80%)"},
-    "생백신 (약독화)": {"efficacy": 0.70, "desc": "전통적 방식의 약독화 백신 (효능 70%)"}
+    "생백신 (약독화)": {"efficacy": 0.70, "desc": "전통적 방식의 약독화 백신 (효능 70%)"},
+    "사백신 (불활성화)": {"efficacy": 0.60, "desc": "사멸시킨 바이러스 활용 백신, 예: 시노팜/시노백 (효능 60%)"}
 }
 
-# 2. 최적화된 수치해석 함수 (연산 속도 대폭 개선)
+# 2. 최적화된 수치해석 함수 (연산 렉 제거)
 def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
-    # 1일 단위 계산으로 스텝 수를 줄여 연산 렉 제거 (dt = 1.0)
     dt = 1.0
     steps = int(days)
     
@@ -115,7 +115,7 @@ col4.metric("최종 회복/면역자", f"{total_recovered:,} 명")
 
 st.markdown("---")
 
-# 5. 차트 데이터 다운샘플링 시각화 (렌더링 속도 향상)
+# 5. 시각화 그래프
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
 chart_data = {
@@ -126,3 +126,37 @@ chart_data = {
 }
 
 st.line_chart(chart_data, height=400)
+
+st.markdown("---")
+
+# 6. 수학적 일반화 (Mathematical Generalization) 설명
+st.subheader("📐 SVIR 모델의 수학적 일반화 (Mathematical Generalization)")
+
+st.markdown(r"""
+전체 인구수 $N$이 일정하다고 가정할 때 ($N = S(t) + V(t) + I(t) + R(t)$), 시간 $t$에 따른 상태 변화는 다음과 같은 **비선형 연립 미분방정식(Nonlinear Ordinary Differential Equations)**으로 정의됩니다.
+
+$$
+\begin{aligned}
+\frac{dS}{dt} &= -\beta \frac{S I}{N} - v S \\[8pt]
+\frac{dV}{dt} &= v S - (1 - e)\beta \frac{V I}{N} \\[8pt]
+\frac{dI}{dt} &= \beta \frac{S I}{N} + (1 - e)\beta \frac{V I}{N} - \gamma I \\[8pt]
+\frac{dR}{dt} &= \gamma I
+\end{aligned}
+$$
+""")
+
+with st.expander("🔍 수학적 파라미터 및 변수 상세 정의 보기"):
+    st.markdown(r"""
+    * **상태 변수 (State Variables)**:
+      * $S(t)$: 시간 $t$에서의 감염 가능 미접종 인구수 (Susceptible)
+      * $V(t)$: 시간 $t$에서의 백신 접종 완료 인구수 (Vaccinated)
+      * $I(t)$: 시간 $t$에서의 감염자 인구수 (Infected)
+      * $R(t)$: 시간 $t$에서의 회복자 및 면역 형성 인구수 (Recovered)
+
+    * **파라미터 (Parameters)**:
+      * $\beta$ (**감염 전파율**, Transmission Rate): $\beta = R_0 \cdot \gamma$
+      * $R_0$ (**기초감염재생산수**, Basic Reproduction Number): 감염자 1명이 면역이 없는 집단에서 감염시킬 수 있는 평균 인원수
+      * $\gamma$ (**회복율/격리해제율**, Recovery Rate): $\gamma = \frac{1}{\text{감염 유효 기간(일)}}$
+      * $v$ (**일일 백신 접종률**, Vaccination Rate): 미접종군($S$)이 매일 백신 접종군($V$)으로 이동하는 비율
+      * $e$ (**백신 효능**, Vaccine Efficacy): 감염 방지율 ($0 \le e \le 1$). 미접종군의 감염율이 $\beta$일 때, 접종군의 돌파감염율은 $(1-e)\beta$가 됨
+    """)
