@@ -17,23 +17,44 @@ st.markdown("""
 - **R (Recovered)**: 회복자 및 면역 확보자
 """)
 
-# 1. 바이러스 및 백신 매개변수 데이터 정의
+# 1. 바이러스 정의 (전파력 R0, 회복기간) - MERS 제거, B형 간염 추가
 VIRUSES = {
     "COVID-19 (원형)": {"R0": 2.5, "gamma": 1/14, "desc": "초기 코로나19 바이러스 (기초감염재생산수 R0 = 2.5)"},
     "COVID-19 (델타 변이)": {"R0": 5.0, "gamma": 1/10, "desc": "높은 전파력을 가진 델타 변이 (R0 = 5.0)"},
     "COVID-19 (오미크론 변이)": {"R0": 10.0, "gamma": 1/7, "desc": "극도로 빠른 전파력의 오미크론 변이 (R0 = 10.0)"},
     "SARS": {"R0": 3.0, "gamma": 1/12, "desc": "사스 중증급성호흡기증후군 (R0 = 3.0)"},
-    "MERS (메르스)": {"R0": 0.8, "gamma": 1/14, "desc": "중동호흡기증후군 (R0 = 0.8, 치사율이 높고 지역적 전파 특성)"}
+    "B형 간염 (Hepatitis B)": {"R0": 1.8, "gamma": 1/30, "desc": "혈액/체액 매개 간염 바이러스 (R0 = 1.8, 긴 감염 유지 기간)"}
 }
 
-# 백신 종류 설정
-VACCINES = {
-    "mRNA 백신": {"efficacy": 0.95, "desc": "화이자/모더나 등 높은 예방 효과 (효능 95%)"},
-    "생백신 (약독화)": {"efficacy": 0.70, "desc": "전통적 방식의 약독화 백신 (효능 70%)"},
-    "사백신 (불활성화)": {"efficacy": 0.60, "desc": "사멸시킨 바이러스 활용 백신, 예: 시노팜/시노백 (효능 60%)"}
+# 2. 백신 데이터 및 바이러스별 실제 효능 매트릭스 (Virus-Vaccine Efficacy Matrix)
+VACCINE_EFFICACY_MATRIX = {
+    "mRNA 백신": {
+        "COVID-19 (원형)": 0.95,
+        "COVID-19 (델타 변이)": 0.85,
+        "COVID-19 (오미크론 변이)": 0.55,
+        "SARS": 0.60,
+        "B형 간염 (Hepatitis B)": 0.85,
+        "desc": "높은 항체 형성률 (변이 바이러스 대응력 우수)"
+    },
+    "생백신 (약독화)": {
+        "COVID-19 (원형)": 0.70,
+        "COVID-19 (델타 변이)": 0.60,
+        "COVID-19 (오미크론 변이)": 0.40,
+        "SARS": 0.65,
+        "B형 간염 (Hepatitis B)": 0.70,
+        "desc": "전통적 약독화 방식 백신"
+    },
+    "사백신 (불활성화)": {
+        "COVID-19 (원형)": 0.60,
+        "COVID-19 (델타 변이)": 0.45,
+        "COVID-19 (오미크론 변이)": 0.25,
+        "SARS": 0.50,
+        "B형 간염 (Hepatitis B)": 0.95, # B형 간염 백신(유전자재조합/사백신)은 예방률 95% 이상으로 우수함
+        "desc": "불활성화/항원 기반 백신 (B형 간염 등에 높은 표준 예방율)"
+    }
 }
 
-# 2. 최적화된 수치해석 함수 (연산 렉 제거)
+# 3. 최적화된 SVIR 수치해석 함수
 def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
     dt = 1.0
     steps = int(days)
@@ -49,6 +70,7 @@ def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
     V[0] = 0
     R[0] = 0
     
+    # 돌파 감염률 적용
     beta_v = beta * (1.0 - efficacy)
     
     for i in range(steps - 1):
@@ -66,11 +88,11 @@ def solve_svir_fast(N, beta, gamma, v, efficacy, I0, days):
         
     return t_arr, S, V, I, R
 
-# 3. 사이드바 조작창
+# 4. 사이드바 조작창
 st.sidebar.header("⚙️ 시뮬레이션 파라미터 설정")
 
-selected_virus = st.sidebar.selectbox("1. 바이러스 종류 선택", list(VIRUSES.keys()), index=2)
-selected_vaccine = st.sidebar.selectbox("2. 백신 종류 선택", list(VACCINES.keys()), index=0)
+selected_virus = st.sidebar.selectbox("1. 바이러스 종류 선택", list(VIRUSES.keys()), index=4) # B형 간염 기본 선택
+selected_vaccine = st.sidebar.selectbox("2. 백신 종류 선택", list(VACCINE_EFFICACY_MATRIX.keys()), index=2) # 사백신 기본 선택
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📈 시뮬레이션 환경 조건")
@@ -79,24 +101,26 @@ initial_infected = st.sidebar.number_input("초기 감염자 수 (명)", value=1
 daily_vac_rate_pct = st.sidebar.slider("일일 백신 접종률 (%)", min_value=0.0, max_value=2.0, value=0.5, step=0.1) / 100.0
 sim_days = st.sidebar.slider("시뮬레이션 기간 (일)", min_value=30, max_value=365, value=180, step=10)
 
-st.info(f"**선택된 바이러스**: {selected_virus} (*{VIRUSES[selected_virus]['desc']}*)\n\n**선택된 백신**: {selected_vaccine} (*{VACCINES[selected_vaccine]['desc']}*)")
-
-# 4. 모델 연산 실행
+# 선택한 바이러스와 백신의 실제 효능 가져오기
 virus_info = VIRUSES[selected_virus]
-vac_info = VACCINES[selected_vaccine]
+vaccine_info = VACCINE_EFFICACY_MATRIX[selected_vaccine]
+actual_efficacy = vaccine_info[selected_virus]
 
+st.info(f"**선택된 바이러스**: {selected_virus} (*{virus_info['desc']}*)\n\n"
+        f"**선택된 백신**: {selected_vaccine} (*{vaccine_info['desc']}*)\n\n"
+        f"👉 **해당 바이러스에 대한 백신의 실제 감염 예방 효능**: **{int(actual_efficacy * 100)}%**")
+
+# 5. 모델 연산 실행
 gamma = virus_info["gamma"]
 R0_val = virus_info["R0"]
 beta = R0_val * gamma
-efficacy = vac_info["efficacy"]
 
-# 속도 최적화 함수 사용
 t_arr, S, V, I, R = solve_svir_fast(
     N=N_pop, 
     beta=beta, 
     gamma=gamma, 
     v=daily_vac_rate_pct, 
-    efficacy=efficacy, 
+    efficacy=actual_efficacy, 
     I0=initial_infected, 
     days=sim_days
 )
@@ -116,7 +140,7 @@ col4.metric("최종 회복/면역자", f"{total_recovered:,} 명")
 
 st.markdown("---")
 
-# 5. 시각화 그래프
+# 6. 시각화 그래프
 st.subheader("📊 시뮬레이션 결과 그래프 (단위: 백만 명)")
 
 chart_data = {
